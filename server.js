@@ -9,19 +9,29 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 
-// Initialisation sécurisée du client Twitter
-const twitterClientInit = new TwitterApi({
-  appKey: (process.env.TWITTER_API_KEY || '').trim(),
-  appSecret: (process.env.TWITTER_API_SECRET || '').trim(),
-  accessToken: (process.env.TWITTER_ACCESS_TOKEN || '').trim(),
-  accessSecret: (process.env.TWITTER_ACCESS_SECRET || '').trim(),
-});
+/**
+ * Nettoyage TRÈS strict des clés.
+ * Supprime tout ce qui n'est pas un caractère alphanumérique ou spécifique aux clés X.
+ */
+const cleanKey = (val) => {
+  if (!val) return '';
+  return val.toString().replace(/[\r\n\s"']/g, '').trim();
+};
 
-const twitterClient = twitterClientInit.readWrite;
+const twitterConfig = {
+  appKey: cleanKey(process.env.TWITTER_API_KEY),
+  appSecret: cleanKey(process.env.TWITTER_API_SECRET),
+  accessToken: cleanKey(process.env.TWITTER_ACCESS_TOKEN),
+  accessSecret: cleanKey(process.env.TWITTER_ACCESS_SECRET),
+};
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+// Initialisation du client
+const twitterClient = new TwitterApi(twitterConfig);
+const rwClient = twitterClient.readWrite;
 
-// Endpoint : Génération de texte
+const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
+
+// API : Génération de texte
 app.post('/api/generate-text', async (req, res) => {
   try {
     const { prompt, tone } = req.body;
@@ -31,56 +41,64 @@ app.post('/api/generate-text', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `Rédige un post X percutant (max 280 car.) sur : ${prompt}. Ton : ${tone}. Pas de guillemets.` }] }]
+        contents: [{ parts: [{ text: `Rédige un post X court et percutant (max 280 car.) sur : ${prompt}. Ton : ${tone}.` }] }]
       })
     });
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    res.status(200).json({ text: text ? text.trim() : "Erreur IA" });
+    res.status(200).json({ text: text ? text.trim() : "Erreur de génération IA" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Endpoint : Publication sur X avec logs de diagnostic
+// API : Publication sur X
 app.post('/api/publish-to-x', async (req, res) => {
   try {
     const { text, imageBase64 } = req.body;
     
-    if (!text || !imageBase64) {
-      return res.status(400).json({ success: false, error: "Contenu ou image manquant." });
-    }
+    console.log("--- NOUVELLE TENTATIVE DE PUBLICATION ---");
+    
+    // Diagnostic longueurs pour vérifier si Render a bien chargé les variables
+    console.log(`Diagnostic Keys - APIKey: ${twitterConfig.appKey.length}, Token: ${twitterConfig.accessToken.length}`);
 
-    console.log("Préparation de l'image...");
+    if (!imageBase64) throw new Error("Image manquante.");
+
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // Vérification des clés avant d'essayer
-    if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_ACCESS_TOKEN) {
-      throw new Error("Les identifiants Twitter sont mal configurés dans l'environnement.");
-    }
+    // 1. Upload Media
+    console.log("Étape 1 : Envoi du média vers X...");
+    // On utilise spécifiquement le client v1 pour l'upload (requis par X pour les images)
+    const mediaId = await rwClient.v1.uploadMedia(imageBuffer, { type: 'png' });
+    console.log("Étape 1 RÉUSSIE. ID Média:", mediaId);
 
-    console.log("Tentative d'upload du média...");
-    const mediaId = await twitterClient.v1.uploadMedia(imageBuffer, { type: 'png' });
-    
-    console.log("Média uploadé avec succès ID:", mediaId);
-
-    console.log("Tentative de publication du tweet...");
-    const tweet = await twitterClient.v2.tweet({
+    // 2. Tweet
+    console.log("Étape 2 : Création du tweet...");
+    const tweet = await rwClient.v2.tweet({
       text: text,
       media: { media_ids: [mediaId] }
     });
 
-    console.log("Tweet publié avec succès ! ID:", tweet.data.id);
+    console.log("SUCCÈS TOTAL. Tweet ID:", tweet.data.id);
     res.status(200).json({ success: true, tweetId: tweet.data.id });
+
   } catch (error) {
-    console.error("ERREUR PUBLICATION X:", error);
-    // On renvoie un message d'erreur plus détaillé
-    let detailedError = error.message;
-    if (error.data) detailedError += ` - ${JSON.stringify(error.data)}`;
+    console.error("ÉCHEC DE PUBLICATION X :");
+    console.error("Status Code:", error.code);
     
-    res.status(500).json({ success: false, error: detailedError });
+    // Si X renvoie une erreur structurée, on l'affiche en entier dans Render
+    if (error.data) {
+      console.error("Détails X API:", JSON.stringify(error.data, null, 2));
+    } else {
+      console.error("Message d'erreur:", error.message);
+    }
+
+    res.status(500).json({ 
+      success: false, 
+      error: error.data ? `X Error: ${JSON.stringify(error.data)}` : error.message 
+    });
   }
 });
 
@@ -88,4 +106,10 @@ app.use(express.static(path.join(__dirname, 'dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Serveur prêt sur le port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Serveur prêt sur le port ${PORT}`);
+  // Log de vérification au boot
+  if (!twitterConfig.appKey || !twitterConfig.accessToken) {
+    console.error("ATTENTION : Les clés Twitter ne sont pas détectées dans l'environnement !");
+  }
+});
