@@ -104,6 +104,14 @@ export default function App() {
     finally { setIsPublishing(false); }
   };
 
+  // Gestionnaire de Drop pour les boutons
+  const onHandleDrop = (e, type) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0], type);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 font-sans">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -120,10 +128,18 @@ export default function App() {
               className="max-w-full h-auto cursor-move" />
           </div>
           <div className="mt-4 flex gap-4 justify-center">
-            <label className="bg-orange-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-orange-700">
+            <label 
+              onDragOver={e => e.preventDefault()} 
+              onDrop={e => onHandleDrop(e, 'base')}
+              className="bg-orange-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-orange-700 transition"
+            >
               Changer Fond <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'base')} />
             </label>
-            <label className="bg-indigo-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-indigo-700">
+            <label 
+              onDragOver={e => e.preventDefault()} 
+              onDrop={e => onHandleDrop(e, 'overlay')}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-indigo-700 transition"
+            >
               Ajouter Image <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'overlay')} />
             </label>
           </div>
