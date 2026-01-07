@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Download, RotateCw, Image as ImageIcon, Sparkles, MessageSquare, Loader2, Copy, Check, Twitter, Dice5 } from 'lucide-react';
+import { Upload, ImageIcon, Sparkles, MessageSquare, Loader2, Twitter, Dice5 } from 'lucide-react';
 
 export default function App() {
   const [baseImage, setBaseImage] = useState(null);
   const [overlayImage, setOverlayImage] = useState(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 450 });
   const [overlayState, setOverlayState] = useState({ x: 400, y: 225, scale: 0.5, rotation: 5 });
   
   const [textPrompt, setTextPrompt] = useState('');
@@ -19,7 +18,6 @@ export default function App() {
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
 
-  // Traitement des images (Upload et Drag & Drop)
   const processFile = (file, type) => {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
@@ -29,7 +27,6 @@ export default function App() {
         if (type === 'base') {
           setBaseImage(e.target.result);
           baseImgRef.current = img;
-          setCanvasSize({ width: img.width, height: img.height });
         } else {
           setOverlayImage(e.target.result);
           overlayImgRef.current = img;
@@ -40,7 +37,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Mise à jour du canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65,18 +61,15 @@ export default function App() {
       ctx.scale(overlayState.scale, overlayState.scale);
       const w = overlayImgRef.current.width;
       const h = overlayImgRef.current.height;
-      
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 20;
       ctx.fillStyle = 'white';
-      const pad = 20;
-      ctx.fillRect(-w/2 - pad, -h/2 - pad, w + pad*2, h + pad*4);
+      ctx.fillRect(-w/2 - 20, -h/2 - 20, w + 40, h + 80);
       ctx.drawImage(overlayImgRef.current, -w/2, -h/2, w, h);
       ctx.restore();
     }
   }, [baseImage, overlayImage, overlayState]);
 
-  // Appel au serveur pour l'IA
   const generateText = async () => {
     if (!textPrompt) return;
     setIsGenerating(true);
@@ -87,16 +80,11 @@ export default function App() {
         body: JSON.stringify({ prompt: textPrompt, tone: selectedTone })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
       setGeneratedText(data.text);
-    } catch (e) { 
-      alert("Erreur génération : " + e.message); 
-    } finally { 
-      setIsGenerating(false); 
-    }
+    } catch (e) { alert("Erreur génération"); }
+    finally { setIsGenerating(false); }
   };
 
-  // Publication sur X
   const publishToX = async () => {
     if (!generatedText || !canvasRef.current) return;
     setIsPublishing(true);
@@ -110,105 +98,46 @@ export default function App() {
         })
       });
       const data = await res.json();
-      if (data.success) alert("Votre post a été publié avec succès !");
+      if (data.success) alert("Publié avec succès !");
       else alert("Erreur : " + data.error);
-    } catch (e) { 
-      alert("Erreur lors de la publication"); 
-    } finally { 
-      setIsPublishing(false); 
-    }
-  };
-
-  // Gestion du Drag & Drop sur les boutons
-  const onDrop = (e, type) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0], type);
-    }
+    } catch (e) { alert("Erreur de connexion"); }
+    finally { setIsPublishing(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-8 font-sans">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Colonne Éditeur Visuel */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-orange-600"><ImageIcon /> Éditeur Visuel</h2>
-            <div className="bg-gray-100 rounded-xl overflow-hidden min-h-[400px] flex items-center justify-center border-2 border-dashed border-gray-300">
-              <canvas ref={canvasRef} 
-                onMouseDown={() => { isDragging.current = true; }}
-                onMouseMove={(e) => {
-                  if (!isDragging.current) return;
-                  setOverlayState(s => ({ ...s, x: s.x + e.movementX, y: s.y + e.movementY }));
-                }}
-                onMouseUp={() => isDragging.current = false}
-                className="max-w-full h-auto cursor-move shadow-md" />
-            </div>
-            <div className="mt-6 flex flex-wrap gap-4 justify-center">
-              <label 
-                onDragOver={e => e.preventDefault()} 
-                onDrop={e => onDrop(e, 'base')} 
-                className="bg-orange-600 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-orange-700 transition font-bold"
-              >
-                Changer Fond <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'base')} />
-              </label>
-              <label 
-                onDragOver={e => e.preventDefault()} 
-                onDrop={e => onDrop(e, 'overlay')} 
-                className="bg-indigo-600 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-indigo-700 transition font-bold"
-              >
-                Ajouter Image <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'overlay')} />
-              </label>
-            </div>
-            {overlayImage && (
-              <div className="mt-4 flex gap-4 justify-center items-center">
-                <span className="text-xs font-bold text-gray-400">Taille:</span>
-                <input type="range" min="0.1" max="2" step="0.01" value={overlayState.scale} onChange={(e) => setOverlayState(s => ({...s, scale: parseFloat(e.target.value)}))} className="w-24 accent-indigo-600" />
-                <span className="text-xs font-bold text-gray-400">Rotation:</span>
-                <input type="range" min="-45" max="45" value={overlayState.rotation} onChange={(e) => setOverlayState(s => ({...s, rotation: parseInt(e.target.value)}))} className="w-24 accent-indigo-600" />
-              </div>
-            )}
+    <div className="min-h-screen bg-gray-50 p-4 font-sans">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-orange-600"><ImageIcon /> Visuel</h2>
+          <div className="bg-gray-100 rounded-xl overflow-hidden border-2 border-dashed flex justify-center">
+            <canvas ref={canvasRef} 
+              onMouseDown={() => { isDragging.current = true; }}
+              onMouseMove={(e) => {
+                if (!isDragging.current) return;
+                setOverlayState(s => ({ ...s, x: s.x + e.movementX, y: s.y + e.movementY }));
+              }}
+              onMouseUp={() => isDragging.current = false}
+              className="max-w-full h-auto cursor-move" />
+          </div>
+          <div className="mt-4 flex gap-4 justify-center">
+            <label className="bg-orange-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-orange-700">
+              Changer Fond <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'base')} />
+            </label>
+            <label className="bg-indigo-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-indigo-700">
+              Ajouter Image <input type="file" className="hidden" onChange={e => processFile(e.target.files[0], 'overlay')} />
+            </label>
           </div>
         </div>
-
-        {/* Colonne Texte & Publication */}
-        <div className="space-y-4">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col h-full">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-indigo-600"><MessageSquare /> Texte du Post</h2>
-            <textarea 
-              value={textPrompt} 
-              onChange={e => setTextPrompt(e.target.value)} 
-              placeholder="Quel est le sujet de votre post ?" 
-              className="w-full p-3 border border-gray-200 rounded-xl mb-4 h-24 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-            />
-            <div className="flex gap-2 mb-4">
-              <select value={selectedTone} onChange={e => setSelectedTone(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs outline-none">
-                <option value="Standard">Ton Standard</option>
-                <option value="Professionnel">Professionnel</option>
-                <option value="Viral">Viral / Hype</option>
-              </select>
-              <button 
-                onClick={generateText} 
-                disabled={isGenerating || !textPrompt} 
-                className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-gray-300"
-              >
-                {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} Générer
-              </button>
-            </div>
-            <textarea 
-              value={generatedText} 
-              onChange={e => setGeneratedText(e.target.value)} 
-              placeholder="Texte généré..." 
-              className="w-full p-3 border border-indigo-100 rounded-xl flex-1 bg-indigo-50 mb-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-            />
-            <button 
-              onClick={publishToX} 
-              disabled={isPublishing || !generatedText || !baseImage || !overlayImage} 
-              className="w-full bg-black text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition hover:bg-gray-900 disabled:bg-gray-400"
-            >
-              {isPublishing ? <Loader2 className="animate-spin" size={20} /> : <Twitter fill="white" size={20} />} Publier sur X
-            </button>
-          </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-indigo-600"><MessageSquare /> Texte</h2>
+          <textarea value={textPrompt} onChange={e => setTextPrompt(e.target.value)} placeholder="Sujet..." className="w-full p-3 border rounded-xl mb-4 h-24" />
+          <button onClick={generateText} disabled={isGenerating} className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 mb-4">
+            {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles />} Générer
+          </button>
+          <textarea value={generatedText} onChange={e => setGeneratedText(e.target.value)} className="w-full p-3 border rounded-xl h-40 bg-indigo-50 mb-4" />
+          <button onClick={publishToX} disabled={isPublishing || !generatedText} className="w-full bg-black text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2">
+            {isPublishing ? <Loader2 className="animate-spin" /> : <Twitter fill="white" />} Publier sur X
+          </button>
         </div>
       </div>
     </div>
