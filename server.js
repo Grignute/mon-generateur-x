@@ -31,17 +31,27 @@ const rwClient = twitterClient.readWrite;
 
 const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
 
-// API : Génération de texte
+// API : Génération de texte optimisée pour la lisibilité
 app.post('/api/generate-text', async (req, res) => {
   try {
     const { prompt, tone } = req.body;
     if (!GEMINI_API_KEY) throw new Error("Clé API Gemini manquante.");
 
+    // Instructions améliorées pour un texte aéré et sans hashtags non sollicités
+    const systemPrompt = `Rédige un post X (max 280 car.) sur le sujet : ${prompt}. 
+    Ton : ${tone}. 
+    
+    Règles strictes de formatage :
+    1. Aère le texte au maximum : utilise des doubles sauts de ligne entre chaque phrase ou paragraphe court pour donner de la légèreté.
+    2. N'ajoute AUCUN hashtag (#) de toi-même. N'en utilise que si l'utilisateur en a spécifiquement inclus dans son sujet.
+    3. Ne mets pas de guillemets autour du post.
+    4. Sois percutant dès la première ligne.`;
+
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `Rédige un post X court et percutant (max 280 car.) sur : ${prompt}. Ton : ${tone}.` }] }]
+        contents: [{ parts: [{ text: systemPrompt }] }]
       })
     });
 
@@ -70,7 +80,6 @@ app.post('/api/publish-to-x', async (req, res) => {
 
     // 1. Upload Media
     console.log("Étape 1 : Envoi du média vers X...");
-    // On utilise spécifiquement le client v1 pour l'upload (requis par X pour les images)
     const mediaId = await rwClient.v1.uploadMedia(imageBuffer, { type: 'png' });
     console.log("Étape 1 RÉUSSIE. ID Média:", mediaId);
 
@@ -88,7 +97,6 @@ app.post('/api/publish-to-x', async (req, res) => {
     console.error("ÉCHEC DE PUBLICATION X :");
     console.error("Status Code:", error.code);
     
-    // Si X renvoie une erreur structurée, on l'affiche en entier dans Render
     if (error.data) {
       console.error("Détails X API:", JSON.stringify(error.data, null, 2));
     } else {
@@ -108,7 +116,6 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Serveur prêt sur le port ${PORT}`);
-  // Log de vérification au boot
   if (!twitterConfig.appKey || !twitterConfig.accessToken) {
     console.error("ATTENTION : Les clés Twitter ne sont pas détectées dans l'environnement !");
   }
