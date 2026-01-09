@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, RotateCw, Maximize, Image as ImageIcon, Trash2, Sparkles, MessageSquare, Loader2, Twitter, RefreshCw } from 'lucide-react';
+import { Upload, RotateCw, Maximize, Image as ImageIcon, Trash2, Sparkles, MessageSquare, Loader2, Twitter, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function App() {
   // --- ÉTAT : IMAGE ---
@@ -16,6 +16,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [selectedTone, setSelectedTone] = useState('Expert Web3 / DeFi');
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // --- REFS ---
   const canvasRef = useRef(null);
@@ -148,6 +149,7 @@ export default function App() {
   const generateText = async () => {
     if (!textPrompt) return;
     setIsGenerating(true);
+    setErrorMessage(null);
     try {
       const response = await fetch('/api/generate-text', {
         method: 'POST',
@@ -156,8 +158,9 @@ export default function App() {
       });
       const data = await response.json();
       if (data.text) setGeneratedText(data.text);
+      else throw new Error("Réponse vide");
     } catch (err) {
-      alert("Erreur de génération.");
+      setErrorMessage("Erreur lors de la génération du texte.");
     } finally {
       setIsGenerating(false);
     }
@@ -166,6 +169,7 @@ export default function App() {
   const handlePublish = async () => {
     if (!generatedText || !canvasRef.current) return;
     setIsPublishing(true);
+    setErrorMessage(null);
     const imageBase64 = canvasRef.current.toDataURL('image/png');
     try {
       const response = await fetch('/api/publish-to-x', {
@@ -181,10 +185,10 @@ export default function App() {
         setGeneratedText('');
         setTextPrompt('');
       } else {
-        throw new Error(result.error);
+        setErrorMessage(result.error || "Une erreur est survenue (403).");
       }
     } catch (err) {
-      alert("Erreur : " + err.message);
+      setErrorMessage("Serveur injoignable.");
     } finally {
       setIsPublishing(false);
     }
@@ -195,6 +199,7 @@ export default function App() {
     overlayImgRef.current = null;
     setGeneratedText('');
     setTextPrompt('');
+    setErrorMessage(null);
   };
 
   return (
@@ -224,17 +229,17 @@ export default function App() {
                 onTouchEnd={stopDragging}
                 className={`max-w-full h-auto shadow-2xl transition-transform ${overlayImage ? 'cursor-move' : 'cursor-default'}`} 
               />
-              {!baseImage && <p className="absolute text-slate-400 font-medium text-center px-4">Chargez un fond pour commencer (format X recommandé)</p>}
+              {!baseImage && <p className="absolute text-slate-400 font-medium text-center px-4">Chargez un fond pour commencer</p>}
             </div>
 
             <div className="mt-6 flex flex-col gap-6">
               <div className="flex flex-wrap gap-3 justify-center">
-                <label className="bg-orange-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-orange-700 transition-all font-bold shadow-md flex items-center gap-2">
-                  <Upload size={20} /> Fond (Canvas)
+                <label className="bg-orange-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-orange-700 transition-all font-bold shadow-md flex items-center gap-2 text-sm">
+                  <Upload size={18} /> Fond
                   <input type="file" className="hidden" onChange={(e) => processFile(e.target.files[0], 'base')} />
                 </label>
-                <label className="bg-indigo-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-indigo-700 transition-all font-bold shadow-md flex items-center gap-2">
-                  <Upload size={20} /> Image / Photo
+                <label className="bg-indigo-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-indigo-700 transition-all font-bold shadow-md flex items-center gap-2 text-sm">
+                  <Upload size={18} /> Photo
                   <input type="file" className="hidden" onChange={(e) => processFile(e.target.files[0], 'overlay')} />
                 </label>
               </div>
@@ -265,10 +270,17 @@ export default function App() {
             </h2>
             
             <div className="space-y-4 flex-1 flex flex-col">
+              {errorMessage && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start gap-2 text-xs">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <p>{errorMessage}</p>
+                </div>
+              )}
+
               <textarea 
                 value={textPrompt} 
                 onChange={(e) => setTextPrompt(e.target.value)} 
-                placeholder="Ex: Analyse de la DeFi sur Solana, actus MoveToEarn ou présence à CryptoXR..." 
+                placeholder="Ex: Analyse de la DeFi sur Solana..." 
                 className="w-full p-4 border border-slate-200 rounded-2xl h-32 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
               />
               
@@ -280,8 +292,8 @@ export default function App() {
                 >
                   <option value="Expert Web3 / DeFi">Expert Web3 / DeFi</option>
                   <option value="Actualité / CryptoXR">Actualité / CryptoXR</option>
-                  <option value="Hype / Engagement">Hype / Engagement (LFG/Bullish)</option>
-                  <option value="Professionnel">Professionnel / Factuel</option>
+                  <option value="Hype / Engagement">Hype / Engagement</option>
+                  <option value="Professionnel">Professionnel</option>
                 </select>
                 <button 
                   onClick={generateText} 
@@ -289,7 +301,7 @@ export default function App() {
                   className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-200 transition-all active:scale-95 shadow-lg"
                 >
                   {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-                  Générer le Post
+                  Générer
                 </button>
               </div>
 
@@ -297,7 +309,7 @@ export default function App() {
                 value={generatedText} 
                 onChange={(e) => setGeneratedText(e.target.value)} 
                 className="w-full p-4 border border-indigo-100 rounded-2xl flex-1 bg-indigo-50/50 text-sm font-medium text-slate-700 resize-none outline-none focus:ring-2 focus:ring-indigo-500" 
-                placeholder="Le post optimisé apparaîtra ici..."
+                placeholder="Le post optimisé..."
               />
 
               <button 
