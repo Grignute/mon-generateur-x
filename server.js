@@ -24,7 +24,10 @@ const twitterConfig = {
   accessSecret: cleanKey(process.env.TWITTER_ACCESS_SECRET),
 };
 
-const twitterClient = new TwitterApi(twitterConfig);
+// Initialisation du client avec accès explicite en lecture/écriture
+const client = new TwitterApi(twitterConfig);
+const twitterClient = client.readWrite;
+
 const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
 
 // --- API : GÉNÉRATION IA ---
@@ -68,11 +71,12 @@ app.post('/api/publish-to-x', async (req, res) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // 1. Upload média via v1 (obligatoire pour les images)
+    // 1. Upload média via v1 (indispensable pour les médias)
+    // On utilise twitterClient qui est déjà en mode readWrite
     console.log("Upload du média...");
     const mediaId = await twitterClient.v1.uploadMedia(imageBuffer, { type: 'png' });
 
-    // 2. Publication du Tweet via v2 (plus stable pour le texte)
+    // 2. Publication du Tweet via v2
     console.log("Publication du tweet...");
     const tweet = await twitterClient.v2.tweet({
       text: text,
@@ -83,9 +87,18 @@ app.post('/api/publish-to-x', async (req, res) => {
 
   } catch (error) {
     console.error("Détails erreur X:", error.data || error.message);
+    
+    // Message d'erreur plus explicite pour le débogage
+    let errorMessage = error.message;
+    if (error.data && error.data.detail) {
+        errorMessage = error.data.detail;
+    } else if (error.data && error.data.errors) {
+        errorMessage = error.data.errors[0].message;
+    }
+
     res.status(500).json({ 
       success: false, 
-      error: error.data ? `Erreur X: ${error.data.detail || JSON.stringify(error.data)}` : error.message 
+      error: `Erreur X: ${errorMessage}` 
     });
   }
 });
