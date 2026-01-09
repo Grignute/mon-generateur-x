@@ -24,9 +24,9 @@ const twitterConfig = {
   accessSecret: cleanKey(process.env.TWITTER_ACCESS_SECRET),
 };
 
-// Initialisation du client avec accès explicite en lecture/écriture
-const client = new TwitterApi(twitterConfig);
-const twitterClient = client.readWrite;
+// Initialisation du client Twitter
+// On utilise directement le client en mode Read/Write
+const twitterClient = new TwitterApi(twitterConfig).readWrite;
 
 const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
 
@@ -68,32 +68,39 @@ app.post('/api/publish-to-x', async (req, res) => {
     
     if (!imageBase64) throw new Error("Image manquante.");
 
+    // Nettoyage du préfixe base64
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // 1. Upload média via v1 (indispensable pour les médias)
-    // On utilise twitterClient qui est déjà en mode readWrite
-    console.log("Upload du média...");
-    const mediaId = await twitterClient.v1.uploadMedia(imageBuffer, { type: 'png' });
+    console.log("Étape 1: Upload du média sur X...");
+    // Note: L'upload de média utilise l'API v1.1 par défaut, ce qui nécessite OAuth 1.0a
+    let mediaId;
+    try {
+      mediaId = await twitterClient.v1.uploadMedia(imageBuffer, { type: 'png' });
+      console.log("Média uploadé avec succès, ID:", mediaId);
+    } catch (uploadError) {
+      console.error("Échec Upload Média:", uploadError.data || uploadError.message);
+      throw new Error(`Échec de l'upload image: ${uploadError.data?.detail || uploadError.message}`);
+    }
 
-    // 2. Publication du Tweet via v2
-    console.log("Publication du tweet...");
+    console.log("Étape 2: Publication du Tweet avec média via API v2...");
+    // Publication via API v2
     const tweet = await twitterClient.v2.tweet({
       text: text,
       media: { media_ids: [mediaId] }
     });
 
+    console.log("Tweet publié avec succès!");
     res.status(200).json({ success: true, tweetId: tweet.data.id });
 
   } catch (error) {
-    console.error("Détails erreur X:", error.data || error.message);
+    console.error("Détails complets de l'erreur X:", JSON.stringify(error.data || error, null, 2));
     
-    // Message d'erreur plus explicite pour le débogage
-    let errorMessage = error.message;
-    if (error.data && error.data.detail) {
-        errorMessage = error.data.detail;
-    } else if (error.data && error.data.errors) {
-        errorMessage = error.data.errors[0].message;
+    let errorMessage = "Erreur inconnue";
+    if (error.data) {
+      errorMessage = error.data.detail || error.data.reason || JSON.stringify(error.data);
+    } else {
+      errorMessage = error.message;
     }
 
     res.status(500).json({ 
