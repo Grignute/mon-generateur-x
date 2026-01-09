@@ -15,7 +15,7 @@ export default function App() {
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [selectedTone, setSelectedTone] = useState('Standard');
+  const [selectedTone, setSelectedTone] = useState('Expert Web3 / DeFi');
 
   // --- REFS ---
   const canvasRef = useRef(null);
@@ -59,7 +59,6 @@ export default function App() {
           baseImgRef.current = img;
           setCanvasSize({ width: img.width, height: img.height });
         } else {
-          // Ajustement auto de la taille pour éviter que la photo mobile soit géante
           let initialScale = 0.5;
           if (baseImgRef.current) {
             const targetWidth = baseImgRef.current.width * 0.4;
@@ -81,7 +80,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // --- GESTION DU DRAG & DROP SOURIS / TOUCH ---
   const startDragging = (clientX, clientY) => {
     if (!overlayImage) return;
     isDragging.current = true;
@@ -111,13 +109,11 @@ export default function App() {
 
   const stopDragging = () => { isDragging.current = false; };
 
-  // --- DESSIN DU CANVAS ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // Définir la taille réelle du canvas
     if (baseImgRef.current) {
       canvas.width = baseImgRef.current.width;
       canvas.height = baseImgRef.current.height;
@@ -139,7 +135,6 @@ export default function App() {
       const w = overlayImgRef.current.width;
       const h = overlayImgRef.current.height;
       
-      // Style Polaroid
       ctx.shadowColor = 'rgba(0,0,0,0.3)';
       ctx.shadowBlur = 30;
       ctx.fillStyle = 'white';
@@ -150,7 +145,6 @@ export default function App() {
     }
   }, [baseImage, overlayImage, overlayState, canvasSize]);
 
-  // --- ACTIONS ---
   const generateText = async () => {
     if (!textPrompt) return;
     setIsGenerating(true);
@@ -182,7 +176,6 @@ export default function App() {
       const result = await response.json();
       if (result.success) {
         alert("Publication réussie !");
-        // Vider les champs après succès
         setOverlayImage(null);
         overlayImgRef.current = null;
         setGeneratedText('');
@@ -208,14 +201,13 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* COLONNE GAUCHE : VISUEL */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-200">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-black flex items-center gap-2 text-orange-600 uppercase tracking-wider">
                 <ImageIcon size={24} /> Éditeur Visuel
               </h2>
-              <button onClick={resetAll} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Tout effacer">
+              <button onClick={resetAll} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
                 <RefreshCw size={20} />
               </button>
             </div>
@@ -232,13 +224,13 @@ export default function App() {
                 onTouchEnd={stopDragging}
                 className={`max-w-full h-auto shadow-2xl transition-transform ${overlayImage ? 'cursor-move' : 'cursor-default'}`} 
               />
-              {!baseImage && <p className="absolute text-slate-400 font-medium">Chargez un fond pour commencer</p>}
+              {!baseImage && <p className="absolute text-slate-400 font-medium text-center px-4">Chargez un fond pour commencer (format X recommandé)</p>}
             </div>
 
             <div className="mt-6 flex flex-col gap-6">
               <div className="flex flex-wrap gap-3 justify-center">
                 <label className="bg-orange-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-orange-700 transition-all font-bold shadow-md flex items-center gap-2">
-                  <Upload size={20} /> Fond
+                  <Upload size={20} /> Fond (Canvas)
                   <input type="file" className="hidden" onChange={(e) => processFile(e.target.files[0], 'base')} />
                 </label>
                 <label className="bg-indigo-600 text-white px-6 py-3 rounded-xl cursor-pointer hover:bg-indigo-700 transition-all font-bold shadow-md flex items-center gap-2">
@@ -257,7 +249,7 @@ export default function App() {
                     <RotateCw size={18} className="text-slate-400" />
                     <input type="range" min="-180" max="180" step="1" value={overlayState.rotation} onChange={(e) => setOverlayState({...overlayState, rotation: parseInt(e.target.value)})} className="flex-1 accent-indigo-600" />
                   </div>
-                  <button onClick={() => {setOverlayImage(null); overlayImgRef.current = null;}} className="text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors">
+                  <button onClick={() => {setOverlayImage(null); overlayImgRef.current = null;}} className="text-red-500 p-2 hover:bg-red-50 rounded-full">
                     <Trash2 size={20} />
                   </button>
                 </div>
@@ -266,37 +258,38 @@ export default function App() {
           </div>
         </div>
 
-        {/* COLONNE DROITE : TEXTE */}
         <div className="space-y-4">
           <div className="bg-white p-6 rounded-3xl shadow-xl flex flex-col h-full border border-slate-200">
             <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-indigo-600 uppercase tracking-wider">
-              <MessageSquare size={24} /> Contenu
+              <MessageSquare size={24} /> Contenu Web3
             </h2>
             
             <div className="space-y-4 flex-1 flex flex-col">
               <textarea 
                 value={textPrompt} 
                 onChange={(e) => setTextPrompt(e.target.value)} 
-                placeholder="Décrivez votre idée de post ici..." 
-                className="w-full p-4 border border-slate-200 rounded-2xl h-32 text-sm resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all" 
+                placeholder="Ex: Analyse de la DeFi sur Solana, actus MoveToEarn ou présence à CryptoXR..." 
+                className="w-full p-4 border border-slate-200 rounded-2xl h-32 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
               />
               
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <select 
                   value={selectedTone} 
                   onChange={(e) => setSelectedTone(e.target.value)} 
                   className="bg-slate-50 border border-slate-200 rounded-xl text-sm p-3 outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="Standard">Ton Standard</option>
-                  <option value="Professionnel">Professionnel</option>
-                  <option value="Viral">Viral / Hype</option>
+                  <option value="Expert Web3 / DeFi">Expert Web3 / DeFi</option>
+                  <option value="Actualité / CryptoXR">Actualité / CryptoXR</option>
+                  <option value="Hype / Engagement">Hype / Engagement (LFG/Bullish)</option>
+                  <option value="Professionnel">Professionnel / Factuel</option>
                 </select>
                 <button 
                   onClick={generateText} 
                   disabled={isGenerating || !textPrompt} 
-                  className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-95 shadow-md"
+                  className="w-full bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-200 transition-all active:scale-95 shadow-lg"
                 >
-                  {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} Générer
+                  {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  Générer le Post
                 </button>
               </div>
 
@@ -304,13 +297,13 @@ export default function App() {
                 value={generatedText} 
                 onChange={(e) => setGeneratedText(e.target.value)} 
                 className="w-full p-4 border border-indigo-100 rounded-2xl flex-1 bg-indigo-50/50 text-sm font-medium text-slate-700 resize-none outline-none focus:ring-2 focus:ring-indigo-500" 
-                placeholder="Le post apparaîtra ici..."
+                placeholder="Le post optimisé apparaîtra ici..."
               />
 
               <button 
                 onClick={handlePublish} 
                 disabled={isPublishing || !generatedText || !baseImage || !overlayImage} 
-                className={`w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-3 shadow-xl transition-all uppercase tracking-widest ${isPublishing ? 'bg-slate-400 cursor-not-allowed' : 'bg-black hover:bg-slate-800 active:scale-95'}`}
+                className={`w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-3 shadow-xl transition-all uppercase tracking-widest ${isPublishing ? 'bg-slate-400' : 'bg-black hover:bg-slate-800 active:scale-95'}`}
               >
                 {isPublishing ? <Loader2 className="animate-spin" /> : <Twitter fill="white" size={20} />} Publier sur X
               </button>
